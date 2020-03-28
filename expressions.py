@@ -49,7 +49,7 @@ def compute_D(max_n):
         if D[e, n] == -1:
             D[e, n] = get_value(e-1, n) + get_value(e, n-1) + get_value(e+1, n-1)
         return D[e, n]
-    sympy.printing.pycode()
+
     for e in range(max_e + 1):
         for n in range(max_n + 1):
             D[e, n] = get_value(e, n)
