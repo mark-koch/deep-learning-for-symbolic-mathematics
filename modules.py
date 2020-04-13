@@ -55,12 +55,14 @@ class MultiHeadAttention(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff):
+    def __init__(self, d_model, num_heads, d_ff, dropout_rate):
         super(EncoderLayer, self).__init__()
         self.mha = MultiHeadAttention(d_model, num_heads)
+        self.dropout_1 = nn.Dropout(dropout_rate)
         self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-12)
         self.linear_1 = nn.Linear(d_model, d_ff, bias=True)
         self.linear_2 = nn.Linear(d_ff, d_model, bias=True)
+        self.dropout_2 = nn.Dropout(dropout_rate)
         self.layer_norm_2 = nn.LayerNorm(d_model, eps=1e-12)
 
     def forward(self, x, padding_mask):
@@ -75,25 +77,30 @@ class EncoderLayer(nn.Module):
             att_matrix: Attention matrix of shape [batch_size, num_heads, seq_len, seq_len]
         """
         att_out, att_matrix = self.mha(x, x, x, padding_mask)  # [batch_size, seq_length, d_model]
+        att_out = self.dropout_1(att_out)
         att_out = self.layer_norm_1(att_out + x)
 
         y = self.linear_1(att_out)
         y = y.relu()
         y = self.linear_2(y)
+        y = self.dropout_2(y)
         y = self.layer_norm_2(y + att_out)
 
         return y, att_matrix
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff):
+    def __init__(self, d_model, num_heads, d_ff, dropout_rate):
         super(DecoderLayer, self).__init__()
         self.mha_1 = MultiHeadAttention(d_model, num_heads)
+        self.dropout_1 = nn.Dropout(dropout_rate)
         self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-12)
         self.mha_2 = MultiHeadAttention(d_model, num_heads)
+        self.dropout_2 = nn.Dropout(dropout_rate)
         self.layer_norm_2 = nn.LayerNorm(d_model, eps=1e-12)
         self.linear_1 = nn.Linear(d_model, d_ff, bias=True)
         self.linear_2 = nn.Linear(d_ff, d_model, bias=True)
+        self.dropout_3 = nn.Dropout(dropout_rate)
         self.layer_norm_3 = nn.LayerNorm(d_model, eps=1e-12)
 
     def forward(self, x, encoder_output, enc_padding_mask, dec_combined_mask):
@@ -114,27 +121,31 @@ class DecoderLayer(nn.Module):
         # Shape of att_out_1: [batch_size, seq_len_dec, d_model]
         # Shape of att_matrix_1: [batch_size, seq_len_dec, seq_len_dec]
         att_out_1, att_matrix_1 = self.mha_1(x, x, x, dec_combined_mask)
+        att_out_1 = self.dropout_1(att_out_1)
         att_out_1 = self.layer_norm_1(att_out_1 + x)
 
         att_out_2, att_matrix_2 = self.mha_2(encoder_output, encoder_output, x, enc_padding_mask)
+        att_out_2 = self.dropout_2(att_out_2)
         att_out_2 = self.layer_norm_2(att_out_2 + att_out_1)
 
         y = self.linear_1(att_out_2)
         y = y.relu()
         y = self.linear_2(y)
+        y = self.dropout_3(y)
         y = self.layer_norm_2(y + att_out_2)
 
         return y, att_matrix_1, att_matrix_2
 
 
 class Encoder(nn.Module):
-    def __init__(self, layers, d_model, num_heads, d_ff, max_seq_len, vocab_size, vocab_padding_index=0):
+    def __init__(self, layers, d_model, num_heads, d_ff, dropout_rate, max_seq_len, vocab_size, vocab_padding_index=0):
         super(Encoder, self).__init__()
         self.d_model = d_model
 
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model, padding_idx=vocab_padding_index)
+        self.dropout = nn.Dropout(dropout_rate)
         self.layers = nn.ModuleList()
-        self.layers.extend([EncoderLayer(d_model, num_heads, d_ff) for _ in range(layers)])
+        self.layers.extend([EncoderLayer(d_model, num_heads, d_ff, dropout_rate) for _ in range(layers)])
 
         # Create positional encoding lookup matrix. Must be registered as buffer, so that it gets put on the right
         # device later.
@@ -160,6 +171,7 @@ class Encoder(nn.Module):
         attention = {}
         x = self.embedding(x) * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
         x += self.positional_encoding[:, :seq_length, :]
+        x = self.dropout(x)
         for i, layer in enumerate(self.layers):
             x, att = layer(x, padding_mask)
             attention["encoder_layer" + str(i+1)] = att
@@ -167,13 +179,14 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, layers, d_model, num_heads, d_ff, max_seq_len, vocab_size, vocab_padding_index=0):
+    def __init__(self, layers, d_model, num_heads, d_ff, dropout_rate, max_seq_len, vocab_size, vocab_padding_index=0):
         super(Decoder, self).__init__()
         self.d_model = d_model
 
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model, padding_idx=vocab_padding_index)
+        self.dropout = nn.Dropout(dropout_rate)
         self.layers = nn.ModuleList()
-        self.layers.extend([DecoderLayer(d_model, num_heads, d_ff) for _ in range(layers)])
+        self.layers.extend([DecoderLayer(d_model, num_heads, d_ff, dropout_rate) for _ in range(layers)])
 
         # Create positional encoding lookup matrix. Must be registered as buffer, so that it gets put on the right
         # device later.
@@ -202,6 +215,7 @@ class Decoder(nn.Module):
         attention = {}
         x = self.embedding(x) * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
         x += self.positional_encoding[:, :seq_length, :]
+        x = self.dropout(x)
         for i, layer in enumerate(self.layers):
             x, att_1, att_2 = layer(x, encoder_output, enc_padding_mask, dec_combined_mask)
             attention["decoder_layer{}_block1".format(i+1)] = att_1
@@ -217,14 +231,15 @@ class Transformer(nn.Module):
         d_model: Dimensionality of the model
         num_heads: Number of heads for multi-head attention
         d_ff: Dimensionality of inner layer for the feed forward networks in each layer
+        dropout_rate: Probability for dropout
         max_input_seq_len: Maximum length of the input sequence that will be provided to the encoder
         max_target_seq_len: Maximum length of the target sequence. These sequences will be fed to the decoder.
         input_vocab_size: Number of characters in the input vocab.
         target_vocab_size: Number of characters in the target vocab.
         vocab_padding_index: Index of the padding char of the vocab. This should be the same for input and target vocab.
     """
-    def __init__(self, encoder_layers, decoder_layers, d_model, num_heads, d_ff, max_input_seq_len, max_target_seq_len,
-                 input_vocab_size, target_vocab_size, vocab_padding_index=0):
+    def __init__(self, encoder_layers, decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_input_seq_len,
+                 max_target_seq_len, input_vocab_size, target_vocab_size, vocab_padding_index=0):
         super(Transformer, self).__init__()
         self.num_encoder_layers = encoder_layers
         self.num_decoder_layers = decoder_layers
@@ -232,10 +247,10 @@ class Transformer(nn.Module):
         self.num_heads = num_heads
         self.d_ff = d_ff
 
-        self.encoder = Encoder(encoder_layers, d_model, num_heads, d_ff, max_input_seq_len, input_vocab_size,
-                               vocab_padding_index)
-        self.decoder = Decoder(decoder_layers, d_model, num_heads, d_ff, max_target_seq_len, target_vocab_size,
-                               vocab_padding_index)
+        self.encoder = Encoder(encoder_layers, d_model, num_heads, d_ff, dropout_rate, max_input_seq_len,
+                               input_vocab_size, vocab_padding_index)
+        self.decoder = Decoder(decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_target_seq_len,
+                               target_vocab_size, vocab_padding_index)
         self.linear = nn.Linear(d_model, target_vocab_size, bias=True)
 
     def forward(self, encoder_input, decoder_input, enc_padding_mask, dec_combined_mask):
