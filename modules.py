@@ -29,8 +29,8 @@ class MultiHeadAttention(nn.Module):
             output: Shape [batch_size, seq_length_q, d_model]
             att_matrix: Attention matrix of shape [batch_size, num_heads, seq_length_q, seq_length_k]
         """
-        V = self.linear_q(V)  # [batch_size, seq_length_v, d_model]
-        K = self.linear_q(K)  # [batch_size, seq_length_k, d_model]
+        V = self.linear_v(V)  # [batch_size, seq_length_v, d_model]
+        K = self.linear_k(K)  # [batch_size, seq_length_k, d_model]
         Q = self.linear_q(Q)  # [batch_size, seq_length_q, d_model]
 
         # Split into multiple heads. Shape [batch_size, num_heads, seq_length, d_model / num_heads]
