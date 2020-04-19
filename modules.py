@@ -132,7 +132,7 @@ class DecoderLayer(nn.Module):
         y = y.relu()
         y = self.linear_2(y)
         y = self.dropout_3(y)
-        y = self.layer_norm_2(y + att_out_2)
+        y = self.layer_norm_3(y + att_out_2)
 
         return y, att_matrix_1, att_matrix_2
 
@@ -154,7 +154,6 @@ class Encoder(nn.Module):
         arg = pos * np.power(10000, 2 * torch.arange(d_model)[np.newaxis] / float(d_model))
         self.positional_encoding[0, :, 0::2] = torch.sin(arg[:, 0::2])
         self.positional_encoding[0, :, 1::2] = torch.cos(arg[:, 1::2])
-        self.register_buffer("positional_encoding", self.positional_encoding)
 
     def forward(self, x, padding_mask):
         """
@@ -226,8 +225,8 @@ class Decoder(nn.Module):
 class Transformer(nn.Module):
     """
     Args:
-        encoder_layers: Number of layers for the encoder
-        decoder_layers: Number of layers for the decoder
+        num_encoder_layers: Number of layers for the encoder
+        num_decoder_layers: Number of layers for the decoder
         d_model: Dimensionality of the model
         num_heads: Number of heads for multi-head attention
         d_ff: Dimensionality of inner layer for the feed forward networks in each layer
@@ -238,20 +237,24 @@ class Transformer(nn.Module):
         target_vocab_size: Number of characters in the target vocab.
         vocab_padding_index: Index of the padding char of the vocab. This should be the same for input and target vocab.
     """
-    def __init__(self, encoder_layers, decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_input_seq_len,
-                 max_target_seq_len, input_vocab_size, target_vocab_size, vocab_padding_index=0):
+    def __init__(self, num_encoder_layers, num_decoder_layers, d_model, num_heads, d_ff, dropout_rate,
+                 max_input_seq_len, max_target_seq_len, input_vocab_size, target_vocab_size, vocab_padding_index=0):
         super(Transformer, self).__init__()
-        self.num_encoder_layers = encoder_layers
-        self.num_decoder_layers = decoder_layers
+        self.num_encoder_layers = num_encoder_layers
+        self.num_decoder_layers = num_decoder_layers
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_ff = d_ff
+        self.dropout_rate = dropout_rate
 
-        self.encoder = Encoder(encoder_layers, d_model, num_heads, d_ff, dropout_rate, max_input_seq_len,
+        self.encoder = Encoder(num_encoder_layers, d_model, num_heads, d_ff, dropout_rate, max_input_seq_len,
                                input_vocab_size, vocab_padding_index)
-        self.decoder = Decoder(decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_target_seq_len,
+        self.decoder = Decoder(num_decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_target_seq_len,
                                target_vocab_size, vocab_padding_index)
+
+        # Final linear layer reuses the weights from the embedding
         self.linear = nn.Linear(d_model, target_vocab_size, bias=True)
+        self.linear.weight = self.decoder.embedding.weight
 
     def forward(self, encoder_input, decoder_input, enc_padding_mask, dec_combined_mask):
         """
