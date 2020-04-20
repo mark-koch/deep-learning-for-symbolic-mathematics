@@ -87,3 +87,30 @@ def collate_fn(data):
     return {"input": input_padded, "target": target_padded, "enc_padding_mask": enc_padding_mask,
             "dec_combined_mask": dec_combined_mask, "dec_padding_mask": dec_padding_mask}
 
+
+def get_validation_batches(data_path, batch_size, max_input_len=-1, max_target_len=-1):
+    """
+    Returns a list of dictionaries with padded validation data and masks for each batch.
+    """
+    batches = []
+    current_batch = []
+    with open(data_path, "r", encoding="utf-8") as f:
+        for line in f.readlines():
+            inp, tar = parse_paper_format(line)
+            inp.insert(0, token2id("<sos>"))
+            tar.insert(0, token2id("<sos>"))
+            inp.append(token2id("<eos>"))
+            tar.append(token2id("<eos>"))
+            if (len(inp) > max_input_len > 0) or (len(tar) > max_target_len > 0):
+                continue
+            current_batch.append((torch.tensor(inp), torch.tensor(tar)))
+
+            if len(current_batch) == batch_size:
+                batches.append(collate_fn(current_batch))
+                current_batch = []
+    # Final batch may have less than batch_size entries
+    if len(current_batch) > 0:
+        batches.append(collate_fn(current_batch))
+
+    return batches
+
