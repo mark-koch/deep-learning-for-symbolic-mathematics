@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     if args.use_amp:
         import apex.amp as amp
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     if args.restore_path is not None:
         print("Restoring from checkpoint: {}".format(args.restore_path))
