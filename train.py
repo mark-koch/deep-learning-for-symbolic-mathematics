@@ -7,6 +7,7 @@ from data import SymbolicIntegrationDataset, collate_fn, get_validation_batches
 from vocab import vocab, token2id, id2token
 import argparse
 import os
+import random
 import matplotlib
 matplotlib.use('pdf')
 import matplotlib.pyplot as plt
@@ -164,7 +165,8 @@ if __name__ == "__main__":
                 print("Step {}, Loss={:.4f}".format(global_step, loss))
 
             # Plot attention
-            if global_step % 1000 == 0:
+            if global_step % args.plot_iter == 0:
+                b = random.randint(0, inp.shape[0]-1)  # Plot from random batch
                 for layer in args.plot_layers:
                     # To label the axes we need differentiate between encoder, decoder and self attention
                     if "encoder" in layer:
@@ -174,23 +176,24 @@ if __name__ == "__main__":
                     else:
                         q_labels, k_labels = target_for_loss, inp
                     q_labels, k_labels = q_labels.detach().cpu(), k_labels.detach().cpu()  # [batch_size, seq_len]
-                    q_labels = [id2token(q_labels[0, i].item()) for i in range(q_labels.shape[1])]
-                    k_labels = [id2token(k_labels[0, i].item()) for i in range(k_labels.shape[1])]
+                    q_labels = [id2token(q_labels[b, i].item()) for i in range(q_labels.shape[1])]
+                    k_labels = [id2token(k_labels[b, i].item()) for i in range(k_labels.shape[1])]
                     # Plot each head
                     fig = plt.figure(figsize=(16, 8))
                     # plt.title("{} - Step {}".format(layer, global_step))
                     for head in range(args.num_heads):
-                        attention = att[layer][0, head].detach().cpu().numpy()  # [seq_len_q, seq_len_k]
+                        attention = att[layer][b, head].detach().cpu().numpy()  # [seq_len_q, seq_len_k]
                         ax = fig.add_subplot(2, 4, head + 1)
                         ax.matshow(attention, cmap="viridis")
-                        ax.set_xticks(range(len(k_labels)))
-                        ax.set_yticks(range(len(q_labels)))
-                        ax.set_ylim(len(k_labels) - 1.5, -0.5)
-                        ax.set_xticklabels(k_labels, fontdict={"fontsize": 7}, rotation=90)
-                        ax.set_yticklabels(q_labels, fontdict={"fontsize": 7})
+                        # TODO: Labels look ugly
+                        # ax.set_xticks(range(len(k_labels)))
+                        # ax.set_yticks(range(len(q_labels)))
+                        # ax.set_ylim(len(k_labels) - 1.5, -0.5)
+                        # ax.set_xticklabels(k_labels, fontdict={"fontsize": 7}, rotation=90)
+                        # ax.set_yticklabels(q_labels, fontdict={"fontsize": 7})
                         ax.set_xlabel("Head {}".format(head + 1))
                     plt.tight_layout()
-                writer.add_figure("attention_" + layer, fig, global_step)
+                    writer.add_figure("attention_" + layer, fig, global_step)
 
             # Validation
             if global_step % args.val_iter == 0 and args.validation_paths:
