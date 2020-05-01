@@ -124,7 +124,7 @@ class DecoderLayer(nn.Module):
         att_out_1 = self.dropout_1(att_out_1)
         att_out_1 = self.layer_norm_1(att_out_1 + x)
 
-        att_out_2, att_matrix_2 = self.mha_2(encoder_output, encoder_output, x, enc_padding_mask)
+        att_out_2, att_matrix_2 = self.mha_2(encoder_output, encoder_output, att_out_1, enc_padding_mask)
         att_out_2 = self.dropout_2(att_out_2)
         att_out_2 = self.layer_norm_2(att_out_2 + att_out_1)
 
