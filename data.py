@@ -33,7 +33,11 @@ class SymbolicIntegrationDataset(IterableDataset):
         while True:
             try:
                 line = next(self.files[self.current_file])
-                inp, tar = parse_paper_format(line)
+                try:
+                    inp, tar = parse_paper_format(line)
+                except Exception:
+                    print("WARNING: Couldn't read line '{}'".format(line))
+                    continue
                 inp.insert(0, token2id("<sos>"))
                 tar.insert(0, token2id("<sos>"))
                 inp.append(token2id("<eos>"))
@@ -41,7 +45,8 @@ class SymbolicIntegrationDataset(IterableDataset):
                 if (len(inp) > self.max_input_len > 0) or (len(tar) > self.max_target_len > 0):
                     continue
                 yield torch.tensor(inp, device=self.device), torch.tensor(tar, device=self.device)
-                self.current_file = (self.current_file + 1) % (len(self.data_paths) - 1)
+                if len(self.data_paths) > 1:
+                    self.current_file = (self.current_file + 1) % (len(self.data_paths) - 1)
             except StopIteration:
                 # The file has ended. We need to reopen the stream
                 self.files[self.current_file].close()
