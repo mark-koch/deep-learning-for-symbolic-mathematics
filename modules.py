@@ -42,12 +42,12 @@ class MultiHeadAttention(nn.Module):
         # Attention of shape [batch_size, num_heads, seq_length_q, seq_length_k]
         att_matrix = Q.matmul(K.transpose(2, 3) / np.sqrt(self.d_model // self.num_heads))
         if mask is not None:
-            att_matrix += mask * -1e10  # Make masked out values really small, so that softmax turns it into 0
+            att_matrix.masked_fill_(mask, -float('inf'))  # Make masked values small, so that softmax turns it into 0
         att_matrix = att_matrix.softmax(dim=-1)  # [batch_size, num_heads, seq_length_q, seq_length_k]
         output = att_matrix.matmul(V)            # [batch_size, num_heads, seq_length_q, d_model / num_heads]
 
         # Concatenate attention heads again
-        output = output.reshape([batch_size, -1, self.d_model])  # [batch_size, seq_length_q, d_model]
+        output = output.transpose(1, 2).reshape([batch_size, -1, self.d_model])  # [batch_size, seq_length_q, d_model]
 
         output = self.linear(output)  # [batch_size, seq_length_q, d_model]
 

@@ -131,8 +131,8 @@ if __name__ == "__main__":
                                                target_for_loss,
                                                reduction="none")  # We reduce manually later
             # We also should mask the loss before reducing
-            loss *= (1 - dec_padding_mask)
-            loss = loss.sum() / dec_padding_mask.sum()
+            loss *= (1 - dec_padding_mask.float())
+            loss = loss.sum() / (dec_padding_mask.shape[0] * dec_padding_mask.shape[1] - dec_padding_mask.sum())
 
             if args.use_amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -198,9 +198,9 @@ if __name__ == "__main__":
                             dec_combined_mask = dec_combined_mask[:, :, :-1, :-1]
                             _, y, _ = model(inp, target_to_decode, enc_padding_mask, dec_combined_mask)
                             # Apply padding mask to the output
-                            mask = 1 - sample["dec_padding_mask"].to(device)  # [batch_size, 1, 1, seq_len_dec]
-                            mask = mask[:, 0, 0, 1:].unsqueeze(-1)            # [batch_size, seq_len_dec, 1]
-                            y *= mask                                         # [batch_size, seq_len_dec, vocab_size]
+                            mask = 1 - sample["dec_padding_mask"].to(device).float()  # [batch_size, 1, 1, seq_len_dec]
+                            mask = mask[:, 0, 0, 1:].unsqueeze(-1)                    # [batch_size, seq_len_dec, 1]
+                            y *= mask                                                 # [batch, seq_len_dec, vocab_size]
                             # Count the number of sequences that are correct
                             predictions = torch.argmax(y, dim=-1)             # [batch_size, seq_len_dec]
                             target = target[:, 1:]                            # [batch_size, seq_len_dec]

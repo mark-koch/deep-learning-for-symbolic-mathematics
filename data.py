@@ -70,8 +70,8 @@ def collate_fn(data):
 
     # Padding masks of shape [batch_size, 1, 1, seq_len]. Empty dimensions are needed for broadcasting in multi-head
     # attention to [..., seq_len_q, seq_len_k].
-    enc_padding_mask = torch.ones(batch_size, 1, 1, max_input_len, dtype=torch.float, requires_grad=False)
-    dec_padding_mask = torch.ones(batch_size, 1, 1, max_target_len, dtype=torch.float, requires_grad=False)
+    enc_padding_mask = torch.ones(batch_size, 1, 1, max_input_len, dtype=torch.bool, requires_grad=False)
+    dec_padding_mask = torch.ones(batch_size, 1, 1, max_target_len, dtype=torch.bool, requires_grad=False)
 
     for i, d in enumerate(data):
         input_padded[i, :d[0].shape[0]] = d[0]
@@ -85,9 +85,10 @@ def collate_fn(data):
     #                                           [0, 0, 1, 1],
     #                                           [0, 0, 0, 1],
     #                                           [0, 0, 0, 0]]
-    look_ahead_mask = torch.ones(max_target_len, max_target_len, dtype=torch.float, requires_grad=False).triu(1)
+    look_ahead_mask = torch.ones(max_target_len, max_target_len, dtype=torch.bool, requires_grad=False).triu(1).bool()
 
-    dec_combined_mask = torch.max(dec_padding_mask, look_ahead_mask)
+    dec_combined_mask = dec_padding_mask | look_ahead_mask
+    dec_combined_mask.requires_grad = False
 
     return {"input": input_padded, "target": target_padded, "enc_padding_mask": enc_padding_mask,
             "dec_combined_mask": dec_combined_mask, "dec_padding_mask": dec_padding_mask}
