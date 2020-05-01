@@ -274,9 +274,11 @@ class Transformer(nn.Module):
         self.decoder = Decoder(num_decoder_layers, d_model, num_heads, d_ff, dropout_rate, max_target_seq_len,
                                target_vocab_size, vocab_padding_index)
 
-        # Final linear layer reuses the weights from the embedding
+        # Final linear layer
+        # TODO: Attention paper reuses embedding weights here. Does this work across modules? May need to move embedding
+        #  layers to this module. I leave it like this and learn new weights for now.
         self.linear = nn.Linear(d_model, target_vocab_size, bias=True)
-        self.linear.weight = self.decoder.embedding.weight
+        # self.linear.weight = self.decoder.embedding.weight  # Reuse embedding embedding weights
 
     def forward(self, encoder_input, decoder_input, enc_padding_mask, dec_combined_mask):
         """
