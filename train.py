@@ -147,8 +147,11 @@ if __name__ == "__main__":
             if args.use_amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
+                    nn.utils.clip_grad_norm_(amp.master_params(optimizer), 5.0)
             else:
                 loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+
             optimizer.step()
             # scheduler.step()
 

@@ -147,13 +147,17 @@ class Encoder(nn.Module):
         self.layers = nn.ModuleList()
         self.layers.extend([EncoderLayer(d_model, num_heads, d_ff, dropout_rate) for _ in range(layers)])
 
+        # Use additional embedding layer instead of positional encoding for now. This works better with FP16 training.
+        # TODO: Maybe do a few more experiments comparing the two.
+        self.positional_embedding = nn.Embedding(num_embeddings=max_seq_len, embedding_dim=d_model,
+                                                 padding_idx=vocab_padding_index)
         # Create positional encoding lookup matrix. Must be registered as buffer, so that it gets put on the right
         # device later.
-        self.register_buffer("positional_encoding", torch.zeros([1, max_seq_len, d_model], requires_grad=False))
-        pos = torch.arange(max_seq_len)[:, np.newaxis]
-        arg = pos * np.power(10000, 2 * torch.arange(d_model)[np.newaxis] / float(d_model))
-        self.positional_encoding[0, :, 0::2] = torch.sin(arg[:, 0::2])
-        self.positional_encoding[0, :, 1::2] = torch.cos(arg[:, 1::2])
+        # self.register_buffer("positional_encoding", torch.zeros([1, max_seq_len, d_model], requires_grad=False))
+        # pos = torch.arange(max_seq_len)[:, np.newaxis]
+        # arg = pos / torch.pow(10000, (2 * (torch.arange(d_model)[np.newaxis, :] // 2)) / float(d_model))
+        # self.positional_encoding[0, :, 0::2] = torch.sin(arg[:, 0::2])
+        # self.positional_encoding[0, :, 1::2] = torch.cos(arg[:, 1::2])
 
     def forward(self, x, padding_mask):
         """
@@ -168,8 +172,15 @@ class Encoder(nn.Module):
         """
         seq_length = x.shape[1]
         attention = {}
-        x = self.embedding(x) * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
-        x += self.positional_encoding[:, :seq_length, :]
+
+        # TODO: Attention paper multiplies by sqrt(d_model) but it seems to work better without
+        x = self.embedding(x)  # * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
+
+        # Use additional embedding layer instead of positional encoding for now. This works better with FP16 training.
+        positions = torch.arange(seq_length, device=x.device, requires_grad=False).unsqueeze(0)
+        x += self.positional_embedding(positions).expand_as(x)
+        # x += self.positional_encoding[:, :seq_length, :]
+
         x = self.dropout(x)
         for i, layer in enumerate(self.layers):
             x, att = layer(x, padding_mask)
@@ -187,13 +198,17 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList()
         self.layers.extend([DecoderLayer(d_model, num_heads, d_ff, dropout_rate) for _ in range(layers)])
 
+        # Use additional embedding layer instead of positional encoding for now. This works better with FP16 training.
+        # TODO: Maybe do a few more experiments comparing the two.
+        self.positional_embedding = nn.Embedding(num_embeddings=max_seq_len, embedding_dim=d_model,
+                                                 padding_idx=vocab_padding_index)
         # Create positional encoding lookup matrix. Must be registered as buffer, so that it gets put on the right
         # device later.
-        self.register_buffer("positional_encoding", torch.zeros([1, max_seq_len, d_model], requires_grad=False))
-        pos = torch.arange(max_seq_len)[:, np.newaxis]
-        arg = pos * np.power(10000, 2 * torch.arange(d_model)[np.newaxis] / float(d_model))
-        self.positional_encoding[0, :, 0::2] = torch.sin(arg[:, 0::2])
-        self.positional_encoding[0, :, 1::2] = torch.cos(arg[:, 1::2])
+        # self.register_buffer("positional_encoding", torch.zeros([1, max_seq_len, d_model], requires_grad=False))
+        # pos = torch.arange(max_seq_len)[:, np.newaxis]
+        # arg = pos / torch.pow(10000, (2 * (torch.arange(d_model)[np.newaxis, :] // 2)) / float(d_model))
+        # self.positional_encoding[0, :, 0::2] = torch.sin(arg[:, 0::2])
+        # self.positional_encoding[0, :, 1::2] = torch.cos(arg[:, 1::2])
 
     def forward(self, x, encoder_output, enc_padding_mask, dec_combined_mask):
         """
@@ -212,8 +227,15 @@ class Decoder(nn.Module):
         """
         seq_length = x.shape[1]
         attention = {}
-        x = self.embedding(x) * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
-        x += self.positional_encoding[:, :seq_length, :]
+
+        # TODO: Attention paper multiplies by sqrt(d_model) but it seems to work better without
+        x = self.embedding(x)  # * np.sqrt(float(self.d_model))  # [batch_size, seq_length, d_model]
+
+        # Use additional embedding layer instead of positional encoding for now. This works better with FP16 training.
+        positions = torch.arange(seq_length, device=x.device, requires_grad=False).unsqueeze(0)
+        x += self.positional_embedding(positions).expand_as(x)
+        # x += self.positional_encoding[:, :seq_length, :]
+
         x = self.dropout(x)
         for i, layer in enumerate(self.layers):
             x, att_1, att_2 = layer(x, encoder_output, enc_padding_mask, dec_combined_mask)
