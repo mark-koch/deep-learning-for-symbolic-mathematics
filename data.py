@@ -52,6 +52,23 @@ class SymbolicIntegrationDataset(IterableDataset):
                 self.files[self.current_file].close()
                 self.files[self.current_file] = open(self.data_paths[self.current_file], "r", encoding="utf-8")
 
+    def seek_forward(self, num_lines):
+        """
+        Skips the first num_lines of the data (wraps around at the end). Can be used to continue training at the
+        previous position in the dataset.
+        Note that the input will not be parsed, it simply counts lines. This means lines that are too long, short or
+        invalid (these will be skipped during training) will lead to slight shifts.
+        """
+        for _ in range(num_lines):
+            try:
+                next(self.files[self.current_file])
+                if len(self.data_paths) > 1:
+                    self.current_file = (self.current_file + 1) % (len(self.data_paths) - 1)
+            except StopIteration:
+                # The file has ended. We need to reopen the stream
+                self.files[self.current_file].close()
+                self.files[self.current_file] = open(self.data_paths[self.current_file], "r", encoding="utf-8")
+
 
 def collate_fn(data):
     """

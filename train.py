@@ -100,6 +100,16 @@ if __name__ == "__main__":
         model.load_state_dict(state["model"])
         optimizer.load_state_dict(state["optimizer"])
         # scheduler.load_state_dict(state["scheduler"])
+        print("Seeking previous position in dataset...")
+        dataset.seek_forward(global_step * args.batch_size)
+
+    def plot(m, p):
+        fig, ax = plt.subplots()
+        im = ax.imshow(m.detach().cpu())
+        fig.colorbar(im)
+        plt.title('{} Steps'.format(global_step))
+        plt.savefig(p, format='png')
+        plt.close(fig)
 
     print("Start training")
     while global_step < 100000000:
